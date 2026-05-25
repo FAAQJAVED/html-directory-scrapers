@@ -1,0 +1,83 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test-html-engine:
+    name: HTML engine — Python ${{ matrix.python-version }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: true
+      matrix:
+        python-version: ["3.9", "3.10", "3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r engines/html/requirements.txt
+          pip install pytest pytest-cov flake8
+      - name: Lint
+        run: flake8 engines/html/ --count --select=E9,F63,F7,F82 --show-source --statistics
+      - name: Type check
+        run: |
+          pip install mypy types-PyYAML
+          mypy engines/html/ --ignore-missing-imports
+      - name: Test
+        run: pytest tests/html/ -v --cov=engines/html --cov-report=term-missing --cov-fail-under=80
+
+  test-wordpress-engine:
+    name: WordPress engine — Python ${{ matrix.python-version }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: true
+      matrix:
+        python-version: ["3.9", "3.10", "3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r engines/wordpress/requirements.txt
+          pip install pytest pytest-cov flake8
+      - name: Lint
+        run: flake8 engines/wordpress/ --count --select=E9,F63,F7,F82 --show-source --statistics
+      - name: Type check
+        run: |
+          pip install mypy types-PyYAML types-requests
+          mypy engines/wordpress/ --ignore-missing-imports
+      - name: Test
+        run: pytest tests/wordpress/ -v --cov=engines/wordpress --cov-report=term-missing --cov-fail-under=80
+
+  smoke-platforms:
+    name: Smoke test — ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install HTML engine deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r engines/html/requirements.txt
+          pip install pytest
+      - name: Smoke test HTML engine
+        run: pytest tests/html/ -v -x -k "not Concurrent"
+      - name: Install WP engine deps
+        run: pip install -r engines/wordpress/requirements.txt
+      - name: Smoke test WordPress engine
+        run: pytest tests/wordpress/ -v -x -k "not Concurrent"

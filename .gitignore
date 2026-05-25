@@ -1,0 +1,50 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg
+*.egg-info/
+dist/
+build/
+
+# Virtual environments
+venv/
+env/
+.venv/
+
+# Config files with real values — NEVER commit these
+engines/html/config.yaml
+engines/wordpress/config.yaml
+engines/**/.env
+
+# Output files — data, not source code
+engines/html/output/
+engines/wordpress/output/
+engines/html/*.xlsx
+engines/wordpress/*.xlsx
+engines/html/*.log
+engines/wordpress/*.log
+
+# Checkpoint and control files
+engines/html/checkpoint.json
+engines/html/*.tmp
+engines/html/command.txt
+engines/wordpress/scraper_checkpoint.json
+engines/wordpress/*.tmp
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Cache and coverage
+.mypy_cache/
+.coverage
+.coverage.*
+htmlcov/
+.pytest_cache/

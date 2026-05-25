@@ -1,0 +1,188 @@
+# ══════════════════════════════════════════════════════════════════════════════
+#  WordPress Directory Scraper — Configuration
+# ══════════════════════════════════════════════════════════════════════════════
+#
+#  HOW TO USE:
+#   1. Copy this file:  cp config.yaml.example config.yaml
+#   2. Fill in every YOUR_* placeholder below.
+#   3. Open browser DevTools → Network tab → trigger a search on the directory
+#      page → find the POST to /wp-admin/admin-ajax.php → inspect form data
+#      to find ajax_action, ajax_location, ajax_status, and sector names.
+#   4. Optionally set geo_bounds to restrict to a specific region.
+#   5. Run: python scraper.py
+#
+#  NEVER commit config.yaml to Git — it is listed in .gitignore.
+#  Store cookies and proxy in .env only (see .env.example).
+# ══════════════════════════════════════════════════════════════════════════════
+
+
+# ── Target Site ───────────────────────────────────────────────────────────────
+# Root URL of the WordPress directory — no trailing slash.
+base_url: "https://YOUR_TARGET_SITE.example.com"
+
+# Path to the searchable directory page (the scraper visits this page to
+# extract the WordPress nonce security token before starting the AJAX loop).
+register_path: "/YOUR_REGISTER_PATH/"
+# e.g.  "/find-a-business/"  or  "/member-directory/"
+
+# Path to the WordPress AJAX endpoint.
+# This is standard across all WordPress sites — rarely needs changing.
+ajax_path: "/wp-admin/admin-ajax.php"
+
+# Output filename prefix.  Final name: {prefix}_YYYYMMDD_HHMMSS.xlsx
+output_prefix: "Results"
+
+# Text written to the Source column in every output row.
+source_label: "Directory"
+
+# Resume-state filename.  Delete this file (or pass --fresh) to force a
+# clean start on the next run.
+checkpoint_file: "scraper_checkpoint.json"
+
+# Log file written alongside the script.
+log_file: "scraper.log"
+
+
+# ── WordPress AJAX Parameters ─────────────────────────────────────────────────
+# The 'action' value POSTed to admin-ajax.php.
+# Find it by inspecting a search POST in DevTools → Payload / Form Data.
+ajax_action: "YOUR_AJAX_ACTION"
+# e.g.  "business_search"  or  "directory_filter"
+
+# Location filter sent with every AJAX request.
+# Leave blank ("") if the site does not filter by location server-side.
+ajax_location: ""
+# e.g.  "london"  or  "new-york"
+
+# Membership/status filter sent with the AJAX request.
+# Leave blank ("") if the site does not use this field.
+ajax_status: ""
+# e.g.  "Member"  or  "Active"
+
+
+# ── Sectors ───────────────────────────────────────────────────────────────────
+# List every sector/category you want to scrape.
+#   name     → sent to the AJAX endpoint; must match exactly what the site
+#               expects (find valid values in the search form's <select>)
+#   category → written to the Category column in your Excel output
+sectors:
+  - name: "YOUR_SECTOR_1_NAME"
+    category: "Your Category Label 1"
+  - name: "YOUR_SECTOR_2_NAME"
+    category: "Your Category Label 2"
+  # - name: "YOUR_SECTOR_3_NAME"
+  #   category: "Your Category Label 3"
+
+
+# ── Geographic Filter (optional) ──────────────────────────────────────────────
+# Remove this entire block to scrape ALL locations with no geographic limit.
+#
+# To restrict to a specific region, set a lat/lng bounding box.
+# Use https://boundingbox.klokantech.com to find exact coordinates for any
+# city or area — select "CSV" format and copy the four values below.
+#
+# Geographic bounding box — remove this entire block to scrape all locations.
+# Use https://boundingbox.klokantech.com (select CSV format) to find exact
+# coordinates for any city or region. Replace the placeholder values below.
+#
+geo_bounds:
+  lat_min: YOUR_LAT_MIN    # Southern boundary of your target region
+  lat_max: YOUR_LAT_MAX    # Northern boundary of your target region
+  lng_min: YOUR_LNG_MIN    # Western boundary of your target region
+  lng_max: YOUR_LNG_MAX    # Eastern boundary of your target region
+
+
+# ── Scraping Behaviour ────────────────────────────────────────────────────────
+
+# Visit company websites to search for an email when none is found on the
+# directory profile page.  Slower but finds significantly more contacts.
+crawl_websites: true
+
+# Maximum AJAX pages to fetch per sector.  Reduce to 3–5 for a quick test run.
+max_pages: 9999
+
+# ── Postcode / ZIP extraction ──────────────────────────────────────────────
+# Optional regex to extract a postcode or ZIP code from address text on
+# result cards. Omit this key (or set to "") to leave the Postcode column
+# blank — useful if your target directory does not include address data.
+#
+# Pattern examples (use double backslashes in YAML):
+#   UK postcode : "\\b[A-Z]{1,2}[0-9][0-9A-Z]?\\s*[0-9][A-Z]{2}\\b"
+#   US ZIP code : "\\b\\d{5}(-\\d{4})?\\b"
+#   AU postcode : "\\b[0-9]{4}\\b"
+postcode_regex: ""
+
+# Random delay in seconds between requests (a value in this range is chosen
+# each time).  Increase if you encounter HTTP 429 rate-limit responses.
+delay_min: 1.0
+delay_max: 2.0
+
+# URL paths tried when crawling a company's own website for an email address.
+# Tried in order — first page with a valid email wins.
+contact_paths:
+  - ""
+  - "/contact"
+  - "/contact-us"
+  - "/about"
+  - "/about-us"
+
+
+# ── Domain Filters ────────────────────────────────────────────────────────────
+
+# skip_domains: these domains are EXCLUDED when extracting a company's website.
+# Always include the target directory's own domain.
+skip_domains:
+  - "YOUR_TARGET_SITE_DOMAIN"    # e.g. "example-directory.com"
+  - "facebook.com"
+  - "instagram.com"
+  - "linkedin.com"
+  - "twitter.com"
+  - "x.com"
+  - "youtube.com"
+  - "google.com"
+
+# junk_domains: email addresses from these domains are rejected entirely.
+junk_domains:
+  - "example.com"
+  - "google.com"
+  - "w3.org"
+  - "sentry.io"
+
+
+# ── Output ────────────────────────────────────────────────────────────────────
+output:
+  # Header row background colour (hex, no '#').
+  # Common choices: 1F4E79 = navy | 2563EB = blue | 16a34a = green | dc2626 = red
+  header_color: "1F4E79"
+
+  # Column names — order here determines the column order in the Data sheet.
+  columns:
+    - "Company"
+    - "Email"
+    - "Phone"
+    - "Website"
+    - "Address"
+    - "Postcode"
+    - "Category"
+    - "Source"
+
+
+# ── Request Headers ───────────────────────────────────────────────────────────
+# Browser User-Agent sent with every request.
+# Update the Chrome version number periodically to stay current.
+user_agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+
+
+# ── Authentication & Proxy ────────────────────────────────────────────────────
+# Leave both values as "" if not needed.
+# IMPORTANT: Never commit real values here to Git.
+# Prefer setting SCRAPER_COOKIES_RAW and SCRAPER_PROXY in your .env file
+# (see .env.example).  Values in .env override these fields at runtime.
+
+# Raw Cookie header value for directories that require an authenticated session.
+# Copy from: browser DevTools → Network → any request → Request Headers → Cookie
+cookies_raw: ""
+
+# HTTP/HTTPS proxy for routing requests through a proxy server.
+# Format: "http://username:password@host:port"
+proxy: ""

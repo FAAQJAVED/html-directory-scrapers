@@ -1,0 +1,176 @@
+# ══════════════════════════════════════════════════════════════════════════════
+#  HTML Directory Scraper — Configuration
+# ══════════════════════════════════════════════════════════════════════════════
+#
+#  HOW TO USE:
+#   1. Copy this file:  cp config.yaml.example config.yaml
+#   2. Fill in every YOUR_* placeholder below.
+#   3. Put session cookies in .env as SCRAPER_COOKIES=...  (see .env.example)
+#   4. Inspect the target site's HTML and update the CSS selectors section.
+#   5. Run: python scraper.py
+#
+#  NEVER commit config.yaml to Git — it is listed in .gitignore.
+#  Store secrets in .env only.
+# ══════════════════════════════════════════════════════════════════════════════
+
+
+# ── Identity ──────────────────────────────────────────────────────────────────
+# Displayed in the terminal banner when the scraper starts.
+tool_name: "YOUR_TOOL_NAME"          # e.g. "Member Directory Scraper"
+
+# Prefix for the output Excel file: {output_prefix}_{YYYYMMDD}.xlsx
+output_prefix: "DirectoryExport"
+
+# Value written to the Source column in every output row.
+source_label: "Directory"
+
+# Log file written alongside the script.
+log_file: "scraper.log"
+
+# Resume-state file.  Delete this file (or echo fresh > command.txt) to
+# force a clean start.
+checkpoint_file: "checkpoint.json"
+
+
+# ── Target site ───────────────────────────────────────────────────────────────
+# Root URL of the directory site — no trailing slash.
+base_url: "https://YOUR_TARGET_SITE.example.com"
+
+# Path to the paginated listing / search-results page.
+# e.g. "/find-a-member", "/search-results.html"
+list_path: "/YOUR_LISTING_PATH"
+
+
+# ── Pagination ────────────────────────────────────────────────────────────────
+# How many result cards the target site shows per page.
+# Used to calculate total pages from the result count.
+page_size: 10
+
+
+# ── Base params ───────────────────────────────────────────────────────────────
+# Fixed query-string parameters appended to every listing-page request.
+# The scraper also appends page= and startRow= automatically.
+base_params:
+  q: ""            # search term if required by the site, or leave blank
+  orderBy: ""      # sort order, if applicable
+
+# Query-string key used to pass service/category filter values.
+# Inspect the target site's search requests in browser DevTools to find it.
+service_param_name: "company_service"
+
+
+# ── Categories ────────────────────────────────────────────────────────────────
+# Names of the categories / membership types you want to capture.
+# Each name here must also appear in badge_image_keywords below.
+# These names end up in the Category column of the output file.
+categories:
+  - name: "Category One"
+  - name: "Category Two"
+  - name: "Category Three"
+  # Add or remove entries to match your target directory.
+
+
+# ── All services ──────────────────────────────────────────────────────────────
+# Slug values appended as repeated service_param_name= query parameters.
+# Find valid slugs by inspecting the site's search form <option> values
+# or by watching listing requests in browser DevTools → Network tab.
+all_services:
+  - "service-slug-one"
+  - "service-slug-two"
+  - "service-slug-three"
+
+
+# ── HTML selectors ────────────────────────────────────────────────────────────
+# CSS selectors that tell the scraper where to find each piece of data.
+# Open the target site in Chrome → right-click an element → Inspect
+# to identify the correct selector for each field.
+selectors:
+  # Outer wrapper element for each result card on the listing page.
+  card_container: ".member-item"
+
+  # <a> tag inside each card that links to the full profile page.
+  profile_link: "a[href*='/YOUR_PROFILE_PATH/']"
+
+  # Element containing the company / member name inside each card.
+  member_name: ".member-name"
+
+  # Badge / service-icon <img> elements inside each card.
+  # Used by badge_image_keywords mapping below to assign categories.
+  badge_images: ".division-logos img"
+
+  # Container element on the profile page that holds contact details.
+  # Used to scope the external-website link search.
+  detail_section: ".member-directory-detail"
+
+
+# ── Badge → Category mapping ──────────────────────────────────────────────────
+# Maps a substring of a badge <img> src attribute to a category name.
+# The category name must match one of the names in the categories list above.
+#
+# How to find keywords:
+#   Open a listing card in DevTools, inspect each badge <img>, copy part of
+#   the src path that uniquely identifies that category's image.
+badge_image_keywords:
+  "service-one-image-keyword":   "Category One"
+  "service-two-image-keyword":   "Category Two"
+  "service-three-image-keyword": "Category Three"
+
+
+# ── Geographic filter ─────────────────────────────────────────────────────────
+# A Python-compatible regex applied to the full text of each profile page.
+# Only records whose extracted Location field matches this pattern are saved
+# to the Data sheet.  Non-matching records go to the Flagged sheet with
+# reason "Outside geographic filter".
+#
+# Set to "" to disable filtering and capture all results.
+#
+# Pattern examples:
+#   UK postcode (generic):   "\\b[A-Z]{1,2}[0-9][0-9A-Z]?\\s*[0-9][A-Z]{2}\\b"
+#   US ZIP code (generic):   "\\b\\d{5}(-\\d{4})?\\b"
+#   Disable (scrape all):    ""
+location_filter_regex: ""
+
+
+# ── HTTP headers ──────────────────────────────────────────────────────────────
+# Sent with every request to mimic a real browser.
+# Update the Chrome version number periodically.
+headers:
+  User-Agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+  Accept: "text/html,application/xhtml+xml,*/*;q=0.8"
+  Accept-Language: "en-US,en;q=0.9"
+  Accept-Encoding: "identity"
+  Connection: "close"
+
+
+# ── Rate limiting ─────────────────────────────────────────────────────────────
+# A random delay between delay_min and delay_max seconds is inserted between
+# profile page requests.  Increase both values if you hit HTTP 429 errors.
+delay_min: 1.0
+delay_max: 2.5
+
+# HTTP request timeout in seconds.
+timeout_seconds: 25
+
+# Timeout in seconds for individual profile/company-page fetches.
+# Shorter than the listing timeout because dead company websites should not stall the run.
+profile_timeout_seconds: 6
+
+
+# ── Daily auto-stop ───────────────────────────────────────────────────────────
+# Automatically stop the scraper at this wall-clock time each day.
+# Uses 24-hour format.  Set to "" to disable.
+stop_at: "23:00"
+
+
+# ── Disk guard ────────────────────────────────────────────────────────────────
+# Pause automatically if free disk space falls below this threshold (MB).
+# Prevents Excel files from being written partially if disk fills up.
+min_free_disk_mb: 500
+
+
+# ── Email verification ────────────────────────────────────────────────────────
+# When true, performs a live SMTP RCPT handshake for each extracted email.
+# Does NOT send any mail.  Validates MX records + SMTP acceptance.
+# Significantly slows the scraper.  Requires: pip install dnspython
+# Only enable if email accuracy is critical for your use case.
+verify_email: false

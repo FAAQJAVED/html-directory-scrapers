@@ -1,0 +1,63 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "html-directory-scrapers"
+version = "1.2.0"
+description = "Two-engine Python toolkit for scraping paginated HTML and WordPress AJAX business directories"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.9"
+authors = [{name = "FAAQJAVED"}]
+keywords = [
+    "scraping", "web-scraping", "lead-generation",
+    "b2b", "directory", "excel", "wordpress", "httpx",
+]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Topic :: Internet :: WWW/HTTP :: Indexing/Search",
+    "Topic :: Office/Business",
+    "Development Status :: 5 - Production/Stable",
+]
+
+[project.scripts]
+html-scraper = "engines.html.scraper:main"
+wp-scraper   = "engines.wordpress.scraper:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["engines*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts   = "-v --tb=short"
+
+[tool.black]
+line-length    = 100
+target-version = ["py39"]
+
+[tool.isort]
+profile     = "black"
+line_length = 100
+
+[tool.mypy]
+python_version      = "3.9"
+warn_return_any     = true
+warn_unused_configs = true
+ignore_missing_imports = true
+strict_optional     = true
+
+[tool.coverage.run]
+source = ["engines"]
+omit   = ["*/__init__.py", "*/scraper.py"]
+
+[tool.coverage.report]
+fail_under = 80
+show_missing = true
