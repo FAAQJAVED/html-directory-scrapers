@@ -109,7 +109,7 @@ class InputController:
             log.warning("Could not set raw terminal mode (%s).", exc)
 
     def _restore_unix(self) -> None:
-        if self._unix_old_settings is not None:
+        if self._unix_old_settings is not None and self._unix_fd is not None:
             try:
                 import termios
                 termios.tcsetattr(

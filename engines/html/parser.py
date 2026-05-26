@@ -155,7 +155,7 @@ def parse_cards(soup: BeautifulSoup, cfg: dict) -> list[dict]:
         name_el = item.select_one(sel.get("member_name", "")) if sel.get("member_name") else None
         name = name_el.get_text(strip=True) if name_el else link.get_text(strip=True)
 
-        url = link.get("href", "")
+        url = str(link.get("href", "") or "")
         if url and not url.startswith("http"):
             url = base_url.rstrip("/") + "/" + url.lstrip("/")
 
@@ -164,7 +164,7 @@ def parse_cards(soup: BeautifulSoup, cfg: dict) -> list[dict]:
         badge_sel = sel.get("badge_images", "")
         if badge_sel:
             for img in item.select(badge_sel):
-                src = img.get("src", "").lower()
+                src = str(img.get("src", "") or "").lower()
                 for keyword, category_name in badge_map.items():
                     if keyword.lower() in src and category_name not in services:
                         services.append(category_name)

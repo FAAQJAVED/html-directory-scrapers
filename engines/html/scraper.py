@@ -179,7 +179,7 @@ def _category_for_service(service: str, categories: list) -> str:
         return service
     for name in names:
         if name.lower() == service.lower():
-            return name
+            return str(name)
     return str(names[0]) if names else service
 
 
