@@ -135,6 +135,7 @@ def setup_logging(log_file: str = "scraper.log") -> None:
 
     fmt = logging.Formatter("%(asctime)s | %(levelname)-8s | %(message)s", datefmt="%H:%M:%S")
 
+    ch: logging.Handler
     if _TQDM_OK:
         # Route console output through tqdm.write so bar is not broken
         class TqdmHandler(logging.StreamHandler):
@@ -179,7 +180,7 @@ def _category_for_service(service: str, categories: list) -> str:
     for name in names:
         if name.lower() == service.lower():
             return name
-    return names[0] if names else service
+    return str(names[0]) if names else service
 
 
 def _print_stats(

@@ -62,7 +62,7 @@ class InputController:
             target=self._listen, daemon=True, name="KeyboardListener"
         )
         self._unix_fd: Optional[int]   = None
-        self._unix_old_settings         = None
+        self._unix_old_settings: Optional[list] = None
 
     def start(self) -> None:
         """Initialise platform terminal state and start the listener thread."""
@@ -134,11 +134,11 @@ class InputController:
     def _listen_windows(self) -> None:
         import msvcrt
         while self._running:
-            if msvcrt.kbhit():
+            if msvcrt.kbhit():  # type: ignore[attr-defined]
                 try:
-                    raw = msvcrt.getch()
+                    raw = msvcrt.getch()  # type: ignore[attr-defined]
                     if raw in (b'\x00', b'\xe0'):
-                        msvcrt.getch()  # discard second byte of extended key
+                        msvcrt.getch()  # type: ignore[attr-defined]  # discard second byte of extended key
                     else:
                         ch = raw.decode("utf-8", errors="ignore").lower()
                         if ch:

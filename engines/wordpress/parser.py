@@ -47,7 +47,7 @@ def decode_entities(text: str) -> str:
     Returns:
         String with known entities replaced by their Unicode equivalents.
     """
-    return _fetcher.decode_entities(text)
+    return str(_fetcher.decode_entities(text))
 
 
 # Keep the private alias for internal use within this module
@@ -162,7 +162,7 @@ def parse_cards(cards_html: str, base_url: str, cfg: Optional[dict] = None) -> d
         a_tag = card.find("a", href=True)
         url = ""
         if a_tag:
-            url = a_tag["href"].split("?")[0].split("&#")[0]
+            url = str(a_tag["href"]).split("?")[0].split("&#")[0]
             if url and not url.startswith("http"):
                 url = base_url.rstrip("/") + "/" + url.lstrip("/")
 
@@ -328,7 +328,7 @@ def scrape_profile(
 
     # ── Email: mailto links → regex scan ──────────────────────────────────────
     for a in soup.find_all("a", href=re.compile(r"^mailto:", re.I)):
-        candidate = a["href"][7:].strip().lower()
+        candidate = str(a["href"])[7:].strip().lower()
         if is_valid_email(candidate, junk_domains):
             email = candidate
             break
@@ -346,12 +346,12 @@ def scrape_profile(
             break
     if not phone:
         for a in soup.find_all("a", href=re.compile(r"^tel:", re.I)):
-            phone = a["href"][4:].strip()
+            phone = str(a["href"])[4:].strip()
             break
 
     # ── Website: first external non-social/utility link ───────────────────────
     for a in soup.find_all("a", href=True):
-        href = a["href"]
+        href = str(a["href"])
         txt = a.get_text(strip=True)
         if not href.startswith("http"):
             continue

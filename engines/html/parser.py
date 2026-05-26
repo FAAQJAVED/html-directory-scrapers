@@ -71,20 +71,21 @@ def extract_email(soup: BeautifulSoup) -> str:
         Lowercase email address string, or "" if none found.
     """
     for a in soup.find_all("a", href=True):
-        href = a["href"]
+        href = str(a["href"])
         if "/cdn-cgi/l/email-protection#" in href:
             email = decode_cf_email(href.split("#")[-1])
             if "@" in email:
                 return email.lower().strip()
 
     for span in soup.find_all("span", {"data-cfemail": True}):
-        email = decode_cf_email(span["data-cfemail"])
+        email = decode_cf_email(str(span["data-cfemail"]))
         if "@" in email:
             return email.lower().strip()
 
     for a in soup.find_all("a", href=True):
-        if a["href"].startswith("mailto:"):
-            return a["href"][7:].strip().lower()
+        href = str(a["href"])
+        if href.startswith("mailto:"):
+            return href[7:].strip().lower()
 
     return ""
 
@@ -234,7 +235,7 @@ def scrape_profile(client, card: dict, cfg: dict) -> Optional[dict]:
         detail = soup
     self_domain = base_url.replace("https://", "").replace("http://", "").rstrip("/").split("/")[0]
     for a in detail.find_all("a", href=True):
-        href = a["href"]
+        href = str(a["href"])
         if href.startswith("//"):
             website = "https:" + href
             break
@@ -252,8 +253,8 @@ def scrape_profile(client, card: dict, cfg: dict) -> Optional[dict]:
     # Phone: tel: link preferred, then regex on page text
     phone_raw = ""
     for a in soup.find_all("a", href=True):
-        if a["href"].startswith("tel:"):
-            phone_raw = a["href"][4:].strip()
+        if str(a["href"]).startswith("tel:"):
+            phone_raw = str(a["href"])[4:].strip()
             break
 
     return {

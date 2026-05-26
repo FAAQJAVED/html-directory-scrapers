@@ -75,7 +75,7 @@ class CheckpointManager:
             return None
         try:
             with open(self.path, "r", encoding="utf-8") as f:
-                state = json.load(f)
+                state: Dict[str, Any] = json.load(f)
             log.info("Checkpoint loaded from %s", self.path)
             return state
         except (OSError, json.JSONDecodeError) as exc:

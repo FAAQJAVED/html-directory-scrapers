@@ -116,6 +116,7 @@ def setup_logging(log_file: str = "scraper.log") -> None:
 
     fmt = logging.Formatter("%(asctime)s | %(levelname)-8s | %(message)s", datefmt="%H:%M:%S")
 
+    ch: logging.Handler
     if _TQDM_OK:
 
         class TqdmHandler(logging.StreamHandler):
@@ -320,6 +321,10 @@ def main() -> None:
     cp = checkpoint.load()
     resuming = bool(cp)
 
+    seen: set = set()
+    clean_rows: list = []
+    flagged_rows: list = []
+
     if resuming:
         output_file = cp.get(
             "output_file", f"{output_prefix}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
@@ -337,9 +342,9 @@ def main() -> None:
         output_file = f"{output_prefix}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
         start_si = 0
         start_page = 1
-        seen: set = set()
-        clean_rows: list = []
-        flagged_rows: list = []
+        seen = set()
+        clean_rows = []
+        flagged_rows = []
         total_scraped = 0
         log.info("Starting fresh run")
 

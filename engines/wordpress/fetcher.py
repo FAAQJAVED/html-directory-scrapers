@@ -386,7 +386,8 @@ def post_ajax(
     for attempt in range(retries):
         try:
             r = sess.post(ajax_url, data=data, headers=ajax_headers, timeout=25)
-            return json.loads(safe_decode(r.content))
+            result: dict = json.loads(safe_decode(r.content))
+            return result
         except Exception as exc:
             if attempt < retries - 1:
                 wait = (attempt + 1) * 4
@@ -437,7 +438,7 @@ def crawl_for_email(
             return False
         return True
 
-    def _find_emails(html: str) -> list:
+    def _find_emails(html: str) -> list[str]:
         found = re.findall(r"[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}", html)
         seen_set: set = set()
         result = []
