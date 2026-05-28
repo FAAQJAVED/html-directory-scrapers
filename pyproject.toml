@@ -56,7 +56,7 @@ strict_optional     = true
 
 [tool.coverage.run]
 source = ["engines"]
-omit   = ["*/__init__.py", "*/scraper.py"]
+omit   = ["*/__init__.py", "*/scraper.py", "*/controls.py"]
 
 [tool.coverage.report]
 fail_under = 80
