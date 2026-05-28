@@ -304,6 +304,14 @@ def scrape_profile(
         Record dict with keys: Company, Email, Phone, Website, Address,
         Postcode, Category, Source.
     """
+    # Lazy import: the autouse fixture in tests/wordpress/conftest.py evicts
+    # 'fetcher' from sys.modules before each test, then mock.patch reimports a
+    # fresh copy and patches http_get on it.  If we relied on the module-level
+    # _fetcher alias (bound at import time), the patch would land on a different
+    # object and the mock would never intercept the call.  Importing here forces
+    # a sys.modules lookup at call time, so mock.patch is always effective.
+    import fetcher as _fetcher  # noqa: PLC0415
+
     rec: dict = {
         "Company": item["name"],
         "Email": "",

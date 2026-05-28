@@ -15,10 +15,19 @@
 #   2. Ensures engines/html/ is at the front of sys.path
 #   3. Evicts any previously cached engine modules from sys.modules
 #      so the next import picks up the correct engine's files.
+#
+# Additionally, an autouse fixture re-enforces HTML engine ordering before
+# every individual test. This is necessary because tests/wordpress/conftest.py
+# also runs module-level code during collection (after this file), which puts
+# engines/wordpress/ at sys.path[0] and evicts all engine modules. Without the
+# per-test fixture, mock.patch("fetcher.safe_get") resolves to the WP fetcher
+# (the last one loaded), which has no safe_get, causing AttributeError.
 # =============================================================================
 
 import sys
 from pathlib import Path
+
+import pytest
 
 _ROOT = Path(__file__).parent.parent.parent
 _HTML_ENGINE = str(_ROOT / "engines" / "html")
@@ -45,3 +54,25 @@ _ENGINE_MODULES = [
 ]
 for _mod in _ENGINE_MODULES:
     sys.modules.pop(_mod, None)
+
+
+@pytest.fixture(autouse=True)
+def _evict_engine_before_each():
+    """
+    Re-enforce HTML engine at sys.path[0] and evict cached engine modules
+    before every HTML test.
+
+    tests/wordpress/conftest.py inserts engines/wordpress/ at sys.path[0]
+    during collection (it runs after this file).  Without re-ordering here,
+    mock.patch("fetcher.safe_get") imports the WP fetcher (which has no
+    safe_get) rather than the HTML one, raising AttributeError.
+    """
+    if _WP_ENGINE in sys.path:
+        sys.path.remove(_WP_ENGINE)
+    if _HTML_ENGINE in sys.path:
+        sys.path.remove(_HTML_ENGINE)
+    sys.path.insert(0, _HTML_ENGINE)
+
+    for mod in _ENGINE_MODULES:
+        sys.modules.pop(mod, None)
+    yield

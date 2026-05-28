@@ -642,3 +642,120 @@ class TestProgressBar:
     def test_zero_total_does_not_crash(self):
         bar = fetcher.progress_bar(0, 0)
         assert isinstance(bar, str)
+
+
+# =============================================================================
+# v1.2.1 — coverage gap tests (CI fix)
+# =============================================================================
+
+
+class TestFetcherElapsedAndRecord:
+    """fetcher.elapsed, record_scrape, and rate_eta branches."""
+
+    def test_elapsed_returns_formatted_string(self):
+        result = fetcher.elapsed()
+        assert isinstance(result, str)
+        assert "m" in result
+
+    def test_record_scrape_appends_timestamp(self):
+        import time
+        import unittest.mock as mock
+        with mock.patch.object(fetcher, "_scrape_ts", []):
+            fetcher.record_scrape()
+            assert len(fetcher._scrape_ts) == 1
+            assert fetcher._scrape_ts[0] <= time.time()
+
+    def test_rate_eta_done_when_nothing_remaining(self):
+        import time
+        import unittest.mock as mock
+        fake_ts = [time.time() - 10, time.time()]
+        with mock.patch.object(fetcher, "_scrape_ts", fake_ts):
+            result = fetcher.rate_eta(100, 100)
+        assert "done" in result
+
+    def test_rate_eta_hours_for_large_remaining(self):
+        import time
+        import unittest.mock as mock
+        fake_ts = [time.time() - 10, time.time()]
+        with mock.patch.object(fetcher, "_scrape_ts", fake_ts):
+            result = fetcher.rate_eta(0, 100000)
+        assert isinstance(result, str) and len(result) > 0
+
+
+class TestMakeClientWithCookies:
+    """fetcher.make_client injects cookies from cfg."""
+
+    def test_make_client_with_cookie_string(self):
+        cfg = {"cookies_raw": "session=abc; token=xyz", "headers": {}, "timeout_seconds": 10}
+        client = fetcher.make_client(cfg)
+        assert client is not None
+        client.close()
+
+    def test_make_client_without_cookies(self):
+        cfg = {"cookies_raw": "", "headers": {}, "timeout_seconds": 10}
+        client = fetcher.make_client(cfg)
+        assert client is not None
+        client.close()
+
+
+class TestScrapeProfileHTML:
+    """parser.scrape_profile returns None on failed fetch and dict on success."""
+
+    def _card(self) -> dict:
+        return {"name": "Acme Ltd", "url": "https://example.com/company/acme/",
+                "services": [], "location": ""}
+
+    def _cfg(self) -> dict:
+        return {
+            "base_url": "https://example.com",
+            "selectors": {"profile_link": "a", "detail_section": ".detail"},
+            "source_label": "Test",
+            "verify_email": False,
+            "location_filter_regex": "",
+            "headers": {},
+            "timeout_seconds": 6,
+            "cookies_raw": "",
+        }
+
+    def test_returns_none_on_failed_fetch(self):
+        import unittest.mock as mock
+        with mock.patch("fetcher.safe_get", return_value=("", 0)):
+            result = parser.scrape_profile(None, self._card(), self._cfg())
+        assert result is None
+
+    def test_returns_none_on_non_200(self):
+        import unittest.mock as mock
+        with mock.patch("fetcher.safe_get", return_value=("", 404)):
+            result = parser.scrape_profile(None, self._card(), self._cfg())
+        assert result is None
+
+    def test_returns_dict_with_correct_keys_on_success(self):
+        import unittest.mock as mock
+        html = """<html><body>
+          <div class="detail">
+            <a href="mailto:info@acme.com">email</a>
+            <a href="https://www.acme.com">website</a>
+          </div></body></html>"""
+        with mock.patch("fetcher.safe_get", return_value=(html, 200)):
+            result = parser.scrape_profile(None, self._card(), self._cfg())
+        assert result is not None
+        assert result["Company"] == "Acme Ltd"
+        assert result["Email"] == "info@acme.com"
+        assert "Website" in result
+
+    def test_extracts_tel_link_as_phone(self):
+        import unittest.mock as mock
+        html = "<html><body><a href='tel:02071234567'>call</a></body></html>"
+        with mock.patch("fetcher.safe_get", return_value=(html, 200)):
+            result = parser.scrape_profile(None, self._card(), self._cfg())
+        assert result is not None
+        assert result["Phone"] == "02071234567"
+
+    def test_location_from_regex(self):
+        import unittest.mock as mock
+        cfg = {**self._cfg(), "location_filter_regex": r"\b\d{5}\b"}
+        html = "<html><body><p>Office at 10001 area</p></body></html>"
+        with mock.patch("fetcher.safe_get", return_value=(html, 200)):
+            result = parser.scrape_profile(None, self._card(), cfg)
+        assert result is not None
+        assert result["Location"] == "10001"

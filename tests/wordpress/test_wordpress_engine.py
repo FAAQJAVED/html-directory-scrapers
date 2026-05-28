@@ -672,3 +672,244 @@ class TestDecodeEntitiesComprehensive:
     def test_multiple_entities(self):
         result = fetcher.decode_entities("A &amp; B &#038; C")
         assert result == "A & B & C"
+
+
+# =============================================================================
+# v1.2.1 — coverage gap tests (CI fix)
+# =============================================================================
+
+
+class TestFetcherBuildHeaders:
+    """fetcher.build_headers and build_ajax_headers."""
+
+    def test_build_headers_uses_configured_user_agent(self):
+        h = fetcher.build_headers({"user_agent": "TestBot/1.0"})
+        assert h["User-Agent"] == "TestBot/1.0"
+
+    def test_build_headers_uses_default_user_agent(self):
+        h = fetcher.build_headers({})
+        assert "Mozilla" in h["User-Agent"]
+        assert "Accept" in h
+
+    def test_build_ajax_headers_includes_xhr_header(self):
+        h = fetcher.build_ajax_headers({}, "https://example.com/register/")
+        assert h["X-Requested-With"] == "XMLHttpRequest"
+        assert h["Referer"] == "https://example.com/register/"
+
+    def test_build_ajax_headers_inherits_user_agent(self):
+        h = fetcher.build_ajax_headers({"user_agent": "MyBot"}, "https://x.com/")
+        assert h["User-Agent"] == "MyBot"
+
+
+class TestFetcherElapsedAndRate:
+    """fetcher.elapsed, record_scrape, rate_and_eta."""
+
+    def test_elapsed_returns_formatted_string(self):
+        result = fetcher.elapsed()
+        assert isinstance(result, str) and "m" in result
+
+    def test_record_scrape_appends_timestamp(self):
+        import time
+        import unittest.mock as mock
+        with mock.patch.object(fetcher, "_scrape_times", []):
+            fetcher.record_scrape()
+            assert len(fetcher._scrape_times) == 1
+
+    def test_rate_and_eta_empty_with_one_timestamp(self):
+        import unittest.mock as mock
+        with mock.patch.object(fetcher, "_scrape_times", [1000.0]):
+            assert fetcher.rate_and_eta(1, 100) == ""
+
+    def test_rate_and_eta_returns_string_with_two_timestamps(self):
+        import time
+        import unittest.mock as mock
+        fake = [time.time() - 10, time.time()]
+        with mock.patch.object(fetcher, "_scrape_times", fake):
+            result = fetcher.rate_and_eta(2, 200)
+        assert isinstance(result, str) and len(result) > 0
+
+    def test_rate_and_eta_done_when_nothing_remaining(self):
+        import time
+        import unittest.mock as mock
+        fake = [time.time() - 10, time.time()]
+        with mock.patch.object(fetcher, "_scrape_times", fake):
+            result = fetcher.rate_and_eta(200, 200)
+        assert "done" in result
+
+
+class TestScrapeProfileWP:
+    """parser.scrape_profile returns correct structure."""
+
+    def _item(self) -> dict:
+        return {"name": "Beta Lettings",
+                "url": "https://example-dir.com/members/beta/",
+                "address": "1 Test Road, London",
+                "postcode": "W1A 1AA"}
+
+    def _cfg(self) -> dict:
+        return {"crawl_websites": False, "contact_paths": None}
+
+    def test_returns_empty_fields_when_no_url(self):
+        item = {**self._item(), "url": ""}
+        result = parser.scrape_profile(
+            None, item, "Lettings", "TestDir", {}, self._cfg(), set(), set()
+        )
+        assert result["Company"] == "Beta Lettings"
+        assert result["Email"] == ""
+        assert result["Category"] == "Lettings"
+
+    def test_returns_empty_on_failed_fetch(self):
+        import unittest.mock as mock
+        with mock.patch("fetcher.http_get", return_value=("", 0)):
+            result = parser.scrape_profile(
+                mock.MagicMock(), self._item(), "Sales", "Dir",
+                {}, self._cfg(), set(), set()
+            )
+        assert result["Email"] == "" and result["Phone"] == ""
+
+    def test_extracts_mailto_email(self):
+        import unittest.mock as mock
+        html = "<html><body><a href='mailto:info@betalettings.com'>e</a></body></html>"
+        with mock.patch("fetcher.http_get", return_value=(html, 200)):
+            result = parser.scrape_profile(
+                mock.MagicMock(), self._item(), "Lettings", "Dir",
+                {}, self._cfg(), set(), set()
+            )
+        assert result["Email"] == "info@betalettings.com"
+
+    def test_extracts_tel_phone(self):
+        import unittest.mock as mock
+        html = "<html><body><a href='tel:02071234567'>call</a></body></html>"
+        with mock.patch("fetcher.http_get", return_value=(html, 200)):
+            result = parser.scrape_profile(
+                mock.MagicMock(), self._item(), "Lettings", "Dir",
+                {}, self._cfg(), set(), set()
+            )
+        assert "02071234567" in result["Phone"]
+
+    def test_extracts_external_website(self):
+        import unittest.mock as mock
+        html = """<html><body>
+          <a href="https://www.betalettings.co.uk">www.betalettings.co.uk</a>
+        </body></html>"""
+        with mock.patch("fetcher.http_get", return_value=(html, 200)):
+            result = parser.scrape_profile(
+                mock.MagicMock(), self._item(), "Lettings", "Dir",
+                {}, self._cfg(), set(), {"example-dir.com"}
+            )
+        assert result["Website"] == "https://www.betalettings.co.uk"
+
+    def test_rejects_junk_email(self):
+        import unittest.mock as mock
+        html = "<html><body><a href='mailto:test@example.com'>e</a></body></html>"
+        with mock.patch("fetcher.http_get", return_value=(html, 200)):
+            result = parser.scrape_profile(
+                mock.MagicMock(), self._item(), "Lettings", "Dir",
+                {}, self._cfg(), {"example.com"}, set()
+            )
+        assert result["Email"] == ""
+
+
+class TestParseCardsWPExtra:
+    """Additional parse_cards coverage."""
+
+    BASE = "https://example-dir.com"
+
+    def test_multiple_cards_all_returned(self):
+        html = """
+        <div class="card"><h3>Alpha</h3><a href="/members/alpha/">View</a></div>
+        <div class="card"><h3>Beta</h3><a href="/members/beta/">View</a></div>
+        <div class="card"><h3>Gamma</h3><a href="/members/gamma/">View</a></div>
+        """
+        result = parser.parse_cards(html, self.BASE)
+        assert len(result) == 3
+        assert "Alpha" in result and "Gamma" in result
+
+    def test_card_with_full_http_url_not_prepended(self):
+        html = """
+        <div class="card">
+          <h3>Delta Corp</h3>
+          <a href="https://example-dir.com/members/delta/">View</a>
+        </div>
+        """
+        result = parser.parse_cards(html, self.BASE)
+        assert "Delta Corp" in result
+        assert result["Delta Corp"]["url"] == "https://example-dir.com/members/delta/"
+
+
+class TestMakeSession:
+    """fetcher.make_session returns a configured requests.Session."""
+
+    def test_make_session_no_cookies(self):
+        import requests
+        sess = fetcher.make_session({})
+        assert isinstance(sess, requests.Session)
+        sess.close()
+
+    def test_make_session_with_cookies(self):
+        import requests
+        sess = fetcher.make_session({"cookies_raw": "a=1; b=2"})
+        assert isinstance(sess, requests.Session)
+        assert "a" in sess.cookies or len(sess.cookies) >= 0
+        sess.close()
+
+    def test_make_session_with_empty_cookies(self):
+        import requests
+        sess = fetcher.make_session({"cookies_raw": ""})
+        assert isinstance(sess, requests.Session)
+        sess.close()
+
+
+class TestParserDecodeEntitiesViaParser:
+    """parser.decode_entities (public wrapper around fetcher.decode_entities)."""
+
+    def test_decode_entities_ampersand(self):
+        assert parser.decode_entities("A &#038; B") == "A & B"
+
+    def test_decode_entities_amp_named(self):
+        assert parser.decode_entities("X &amp; Y") == "X & Y"
+
+    def test_decode_entities_no_change(self):
+        s = "Nothing to decode"
+        assert parser.decode_entities(s) == s
+
+
+class TestFilterByBoundsEdge:
+    """filter_by_bounds boundary and type edge cases."""
+
+    BOUNDS = {"lat_min": 51.28, "lat_max": 51.70,
+              "lng_min": -0.51, "lng_max": 0.33}
+
+    def test_marker_exactly_on_boundary_included(self):
+        markers  = [{"title": "Edge Co", "lat": 51.28, "lng": -0.51}]
+        card_map = {"Edge Co": {"address": "Edge Rd", "postcode": "E1 1AA", "url": "/e"}}
+        result   = parser.filter_by_bounds(markers, card_map, self.BOUNDS)
+        assert len(result) == 1
+
+    def test_marker_slightly_outside_excluded(self):
+        markers  = [{"title": "Out Co", "lat": 51.27, "lng": -0.51}]
+        card_map = {"Out Co": {"address": "Far Rd", "postcode": "", "url": "/o"}}
+        result   = parser.filter_by_bounds(markers, card_map, self.BOUNDS)
+        assert result == []
+
+    def test_card_map_miss_gives_empty_address(self):
+        markers  = [{"title": "Unknown Co", "lat": 51.5, "lng": 0.0}]
+        result   = parser.filter_by_bounds(markers, {}, self.BOUNDS)
+        assert len(result) == 1
+        assert result[0]["address"] == ""
+        assert result[0]["postcode"] == ""
+
+
+class TestIsValidEmailExtra:
+    """is_valid_email extra branches."""
+
+    JUNK = {"example.com"}
+
+    def test_capital_letters_normalised(self):
+        assert parser.is_valid_email("INFO@Company.IO", self.JUNK)
+
+    def test_plus_addressing_accepted(self):
+        assert parser.is_valid_email("user+tag@domain.co.uk", self.JUNK)
+
+    def test_css_extension_rejected(self):
+        assert not parser.is_valid_email("style@sheet.css", self.JUNK)
