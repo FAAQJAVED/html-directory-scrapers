@@ -433,7 +433,7 @@ The scraper visits `register_path` to extract the nonce. Check that `register_pa
 
 ---
 
-## Known Limitations
+## Known Limitations.
 
 - **JavaScript-rendered directories are not supported.** If listings only appear after JavaScript executes, neither engine will find any cards. Confirm via View Source before configuring.
 
