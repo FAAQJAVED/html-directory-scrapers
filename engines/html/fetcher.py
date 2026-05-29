@@ -327,7 +327,7 @@ def smtp_verify(email: str) -> bool:
     try:
         domain = email.split("@")[1]
         mx_records = dns.resolver.resolve(domain, "MX")
-        mx_host = sorted(mx_records, key=lambda r: r.preference)[0].exchange.to_text()
+        mx_host = sorted(mx_records, key=lambda r: r.preference)[0].exchange.to_text()  # type: ignore[attr-defined]
         with smtplib.SMTP(mx_host, 25, timeout=5) as smtp:
             smtp.ehlo("check.local")
             smtp.mail("probe@check.local")

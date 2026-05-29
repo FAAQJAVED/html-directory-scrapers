@@ -913,3 +913,243 @@ class TestIsValidEmailExtra:
 
     def test_css_extension_rejected(self):
         assert not parser.is_valid_email("style@sheet.css", self.JUNK)
+
+
+# =============================================================================
+# Coverage-gap tests — added to push total WordPress engine coverage ≥ 80%.
+# Each class targets specific missing lines identified in the coverage report.
+# =============================================================================
+
+
+class TestMakeSessionProxy:
+    """make_session proxy branch — lines 210-212 of fetcher.py."""
+
+    def test_proxy_is_configured_on_session(self):
+        cfg = {"proxy": "http://proxy.example.com:8080"}
+        sess = fetcher.make_session(cfg)
+        assert sess.proxies.get("http") == "http://proxy.example.com:8080"
+        assert sess.proxies.get("https") == "http://proxy.example.com:8080"
+        sess.close()
+
+
+class TestHttpGetSuccess:
+    """http_get returns decoded body + 200 on a clean response — line 267."""
+
+    def test_returns_body_and_status_on_success(self):
+        import unittest.mock as mock
+
+        mock_resp = mock.MagicMock()
+        mock_resp.content = b"Hello world"
+        mock_resp.status_code = 200
+        mock_sess = mock.MagicMock()
+        mock_sess.get.return_value = mock_resp
+
+        body, code = fetcher.http_get(mock_sess, "http://example.com", {})
+
+        assert body == "Hello world"
+        assert code == 200
+        assert mock_sess.get.call_count == 1
+
+
+class TestHttpGetTimeoutRetry:
+    """Non-crawl Timeout triggers retry logic — lines 275-280 of fetcher.py."""
+
+    def test_timeout_retries_then_returns_empty(self):
+        import unittest.mock as mock
+        import requests as req_lib
+
+        mock_sess = mock.MagicMock()
+        mock_sess.get.side_effect = req_lib.exceptions.Timeout()
+
+        with mock.patch("time.sleep"):  # prevent real sleeps in CI
+            body, code = fetcher.http_get(
+                mock_sess, "http://slow.example.com", {}, retries=2, is_crawl=False
+            )
+
+        assert body == ""
+        assert code == 0
+        assert mock_sess.get.call_count == 2  # attempted twice, no more
+
+
+class TestGetNonce:
+    """fetcher.get_nonce extracts nonce from page source — lines 324-338."""
+
+    def test_extracts_nonce_from_json_property(self):
+        import unittest.mock as mock
+
+        html = '<script>var data = {"nonce":"abc12345","action":"search"};</script>'
+        with mock.patch.object(fetcher, "http_get", return_value=(html, 200)):
+            result = fetcher.get_nonce(mock.MagicMock(), "http://example.com/register", {})
+        assert result == "abc12345"
+
+    def test_returns_empty_when_page_request_fails(self):
+        import unittest.mock as mock
+
+        with mock.patch.object(fetcher, "http_get", return_value=("", 0)):
+            result = fetcher.get_nonce(mock.MagicMock(), "http://example.com/register", {})
+        assert result == ""
+
+    def test_returns_empty_when_no_nonce_token_present(self):
+        import unittest.mock as mock
+
+        with mock.patch.object(fetcher, "http_get", return_value=("<html>no token here</html>", 200)):
+            result = fetcher.get_nonce(mock.MagicMock(), "http://example.com/register", {})
+        assert result == ""
+
+    def test_extracts_nonce_from_data_attribute(self):
+        import unittest.mock as mock
+
+        html = '<div class="search-wrapper" data-nonce="def67890"></div>'
+        with mock.patch.object(fetcher, "http_get", return_value=(html, 200)):
+            result = fetcher.get_nonce(mock.MagicMock(), "http://example.com/register", {})
+        assert result == "def67890"
+
+
+class TestRateAndEtaZeroSpan:
+    """rate_and_eta returns '' when window timestamps are identical — line 501."""
+
+    def test_identical_timestamps_returns_empty_string(self):
+        import unittest.mock as mock
+
+        t = 1_000_000.0  # two identical timestamps → secs == 0
+        with mock.patch.object(fetcher, "_scrape_times", [t, t]):
+            result = fetcher.rate_and_eta(10, 100)
+        assert result == ""
+
+
+class TestParseCardsSkipsCardWithNoName:
+    """parse_cards continue branch when card has no <h3> — line 155 of parser.py."""
+
+    def test_card_without_h3_is_skipped(self):
+        html = (
+            '<div class="card">'
+            "<p>123 High Street, London</p>"
+            '<a href="/members/anon">View</a>'
+            "</div>"
+        )
+        result = parser.parse_cards(html, "https://example.com")
+        assert result == {}
+
+    def test_card_with_empty_h3_is_skipped(self):
+        html = '<div class="card"><h3>   </h3><p>Some address</p></div>'
+        result = parser.parse_cards(html, "https://example.com")
+        assert result == {}
+
+
+class TestFilterByBoundsExceptionHandling:
+    """filter_by_bounds except block skips malformed markers — lines 224-225."""
+
+    BOUNDS = {"lat_min": 51.0, "lat_max": 52.0, "lng_min": -1.0, "lng_max": 1.0}
+
+    def test_marker_with_non_numeric_lat_is_skipped(self):
+        markers = [{"title": "Bad Co", "lat": "not-a-number", "lng": 0.0}]
+        result = parser.filter_by_bounds(markers, {}, self.BOUNDS)
+        assert result == []
+
+    def test_valid_marker_processed_despite_earlier_bad_one(self):
+        markers = [
+            {"title": "Bad Co", "lat": "NaN", "lng": 0.0},
+            {"title": "Good Co", "lat": 51.5, "lng": 0.0},
+        ]
+        card_map = {"Good Co": {"address": "1 Road", "postcode": "EC1A 1BB", "url": "/good"}}
+        result = parser.filter_by_bounds(markers, card_map, self.BOUNDS)
+        assert len(result) == 1
+        assert result[0]["name"] == "Good Co"
+
+
+class TestMarkersToItemsExceptionHandling:
+    """markers_to_items except block skips non-dict entries — lines 258-259."""
+
+    def test_none_marker_is_skipped_gracefully(self):
+        result = parser.markers_to_items([None], {})
+        assert result == []
+
+    def test_valid_markers_processed_after_bad_entry(self):
+        markers = [None, {"title": "OK Co", "lat": 51.5, "lng": 0.0}]
+        card_map = {"OK Co": {"address": "2 Lane", "postcode": "", "url": "/ok"}}
+        result = parser.markers_to_items(markers, card_map)
+        assert len(result) == 1
+        assert result[0]["name"] == "OK Co"
+
+
+class TestScrapeProfileExtraPaths:
+    """
+    Additional scrape_profile branches in parser.py:
+      - line 346: regex email fallback (no mailto link, email in body text)
+      - lines 350-354: phone extracted from labeled <p> paragraph
+      - line 367: link skipped because domain is in skip_domains
+      - lines 374-375: crawl_for_email called when profile has no email but has website
+    """
+
+    _ITEM = {"name": "Test Co", "url": "http://tpos.co.uk/test", "address": "1 St", "postcode": ""}
+    _JUNK: set = set()
+    _SKIP = {"tpos.co.uk"}
+
+    def test_email_extracted_from_body_text_when_no_mailto(self):
+        """Line 346 — extract_emails() fallback fires when no mailto link present."""
+        import unittest.mock as mock
+
+        html = """
+        <html><body>
+          <p>For enquiries email us at office@testco.io today.</p>
+        </body></html>
+        """
+        with mock.patch("fetcher.http_get", return_value=(html, 200)):
+            result = parser.scrape_profile(
+                mock.MagicMock(), self._ITEM, "Agent", "TPOS",
+                {}, {"crawl_websites": False}, self._JUNK, self._SKIP,
+            )
+        assert result["Email"] == "office@testco.io"
+
+    def test_phone_extracted_from_labeled_paragraph(self):
+        """Lines 353-354 — 'Phone Number: <number>' paragraph matched before tel: link.
+        The regex is Phone\\s+(?:number\\s*)?: so at least one space before the colon
+        is required; 'Phone Number:' satisfies the optional 'number' group."""
+        import unittest.mock as mock
+
+        html = """
+        <html><body>
+          <p>Phone Number: 02071234567</p>
+        </body></html>
+        """
+        with mock.patch("fetcher.http_get", return_value=(html, 200)):
+            result = parser.scrape_profile(
+                mock.MagicMock(), self._ITEM, "Agent", "TPOS",
+                {}, {}, self._JUNK, self._SKIP,
+            )
+        assert result["Phone"] == "02071234567"
+
+    def test_skip_domains_link_bypassed_to_find_real_website(self):
+        """Line 367 — link whose href contains a skip-domain is skipped via continue."""
+        import unittest.mock as mock
+
+        html = """
+        <html><body>
+          <a href="https://www.tpos.co.uk/members/test">TPOS Directory</a>
+          <a href="https://www.testco.co.uk">Visit www.testco.co.uk</a>
+        </body></html>
+        """
+        with mock.patch("fetcher.http_get", return_value=(html, 200)):
+            result = parser.scrape_profile(
+                mock.MagicMock(), self._ITEM, "Agent", "TPOS",
+                {}, {}, self._JUNK, self._SKIP,
+            )
+        assert result["Website"] == "https://www.testco.co.uk"
+
+    def test_crawl_for_email_invoked_when_profile_has_no_email(self):
+        """Lines 374-375 — crawl_for_email called when crawl_websites=True and email missing."""
+        import unittest.mock as mock
+
+        html = """
+        <html><body>
+          <a href="https://www.testco.co.uk">Visit www.testco.co.uk</a>
+        </body></html>
+        """
+        with mock.patch("fetcher.http_get", return_value=(html, 200)), \
+             mock.patch("fetcher.crawl_for_email", return_value="crawled@testco.co.uk") as mock_crawl:
+            result = parser.scrape_profile(
+                mock.MagicMock(), self._ITEM, "Agent", "TPOS",
+                {}, {"crawl_websites": True}, self._JUNK, self._SKIP,
+            )
+        mock_crawl.assert_called_once()
+        assert result["Email"] == "crawled@testco.co.uk"
